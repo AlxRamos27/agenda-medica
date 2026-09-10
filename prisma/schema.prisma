@@ -1,0 +1,161 @@
+// Prisma schema - Agenda Digital Médico
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Agenda ----------
+
+model Paciente {
+  id          String   @id @default(cuid())
+  nombre      String
+  apellido    String
+  cedula      String?  @unique
+  telefono    String?
+  email       String?
+  fechaNacimiento DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  citas           Cita[]
+  historial       RegistroHistorial[]
+  alergias        Alergia[]
+  ventas          Venta[]
+}
+
+model Cita {
+  id          String     @id @default(cuid())
+  paciente    Paciente   @relation(fields: [pacienteId], references: [id])
+  pacienteId  String
+  fecha       DateTime
+  motivo      String?
+  estado      EstadoCita @default(PENDIENTE)
+  notas       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+enum EstadoCita {
+  PENDIENTE
+  CONFIRMADA
+  ATENDIDA
+  CANCELADA
+}
+
+// ---------- Historial médico ----------
+
+model RegistroHistorial {
+  id          String   @id @default(cuid())
+  paciente    Paciente @relation(fields: [pacienteId], references: [id])
+  pacienteId  String
+  fecha       DateTime @default(now())
+  motivoConsulta String
+  diagnostico String?
+  tratamiento String?
+  notas       String?
+  createdAt   DateTime @default(now())
+}
+
+model Alergia {
+  id          String   @id @default(cuid())
+  paciente    Paciente @relation(fields: [pacienteId], references: [id])
+  pacienteId  String
+  descripcion String
+  severidad   Severidad @default(MODERADA)
+  createdAt   DateTime @default(now())
+}
+
+enum Severidad {
+  LEVE
+  MODERADA
+  SEVERA
+}
+
+// ---------- Administración ----------
+
+model Venta {
+  id          String     @id @default(cuid())
+  paciente    Paciente?  @relation(fields: [pacienteId], references: [id])
+  pacienteId  String?
+  concepto    String
+  monto       Float
+  moneda      String     @default("USD")
+  fecha       DateTime   @default(now())
+  metodoPago  MetodoPago @default(PAGO_MOVIL)
+  factura     Factura?
+  createdAt   DateTime   @default(now())
+}
+
+enum MetodoPago {
+  EFECTIVO
+  PAGO_MOVIL
+  TRANSFERENCIA
+  ZELLE
+  OTRO
+}
+
+model Compra {
+  id          String   @id @default(cuid())
+  concepto    String
+  monto       Float
+  moneda      String   @default("USD")
+  proveedor   String?
+  fecha       DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+model Gasto {
+  id          String   @id @default(cuid())
+  concepto    String
+  categoria   String?
+  monto       Float
+  moneda      String   @default("USD")
+  fecha       DateTime @default(now())
+  createdAt   DateTime @default(now())
+}
+
+// ---------- Facturación ----------
+
+model Factura {
+  id            String        @id @default(cuid())
+  venta         Venta         @relation(fields: [ventaId], references: [id])
+  ventaId       String        @unique
+  numero        String        @unique
+  fechaEmision  DateTime      @default(now())
+  estado        EstadoFactura @default(EMITIDA)
+  // referencia externa cuando se integre un proveedor homologado
+  // (ej. Cachicamo / Alegra) para validez fiscal real
+  proveedorFiscalRef String?
+  createdAt     DateTime      @default(now())
+}
+
+enum EstadoFactura {
+  EMITIDA
+  ANULADA
+}
+
+// ---------- Bot de WhatsApp ----------
+
+// Estado de la conversación de agendamiento por WhatsApp. Una fila por
+// número de teléfono; se reinicia cuando el flujo termina o se abandona.
+model ConversacionWhatsApp {
+  id             String           @id @default(cuid())
+  telefono       String           @unique
+  paso           PasoConversacion @default(ELIGIENDO_HORARIO)
+  fechaElegida   DateTime?
+  nombreCompleto String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+}
+
+enum PasoConversacion {
+  ELIGIENDO_HORARIO
+  PIDIENDO_NOMBRE
+  PIDIENDO_MOTIVO
+}
